@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh-Hant" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>專業數學引導課件：四則混合運算</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&family=Noto+Sans+TC:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --p-pink: #FFB7CE; --p-border: #FF8EB2; --p-blue: #A2D2FF; }
+        * { font-family: 'Noto Sans TC', 'Quicksand', sans-serif; touch-action: none; -webkit-tap-highlight-color: transparent; }
+        body { background: #FFF9FB; background-image: radial-gradient(#FFD1DC 1px, transparent 1px); background-size: 30px 30px; height: 100vh; overflow: hidden; }
+        
+        /* 縫線卡片效果 */
+        .stitch-card { 
+            background: white; border: 4px solid var(--p-pink); border-radius: 2rem; 
+            position: relative; box-shadow: 0 8px 0px #FFD1DC; transition: all 0.3s ease;
+        }
+        .stitch-card::after { 
+            content: ''; position: absolute; inset: 4px; border: 2px dashed var(--p-pink); 
+            border-radius: 1.6rem; pointer-events: none; 
+        }
+
+        /* 輸入框美化 */
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+
+        .cute-btn { 
+            background: var(--p-pink); color: white; border-bottom: 5px solid #FF8EB2; 
+            border-radius: 1.2rem; font-weight: 700; transition: all 0.1s; cursor: pointer;
+        }
+        .cute-btn:active { transform: translateY(3px); border-bottom-width: 2px; }
+        .cute-btn.tool-active { background: #ec4899; border-bottom-color: #be185d; transform: translateY(2px); }
+
+        .step-active { background: #FFF0F5; border-color: #FF8EB2; transform: scale(1.02); z-index: 10; }
+        
+        /* 錯誤動畫 */
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+        .input-error { animation: shake 0.4s; border-color: #f43f5e !important; color: #f43f5e; }
+        
+        .math-font { font-family: 'Quicksand', sans-serif; }
+        #report-card { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="h-full flex flex-col p-4 gap-4">
+
+    <canvas id="confetti-canvas" class="fixed inset-0 pointer-events-none z-[100]"></canvas>
+
+    <div class="h-20 flex items-center justify-between px-8 stitch-card shrink-0">
+        <div class="flex items-center gap-6">
+            <h2 class="text-2xl font-black text-pink-600 tracking-tighter">MATH CHALLENGE <span class="text-slate-400 font-light ml-2">四則運算</span></h2>
+            <div id="level-badge" class="bg-yellow-400 text-yellow-900 px-4 py-1 rounded-full text-xs font-black border-2 border-yellow-500 shadow-sm"></div>
+        </div>
+        <div class="flex gap-4 items-center">
+            <div class="bg-white border-2 border-pink-100 px-5 py-1 rounded-full text-pink-500 font-bold">
+                Progress: <span id="q-idx" class="math-font">1/35</span>
+            </div>
+            <div class="bg-pink-500 text-white px-6 py-1 rounded-full shadow-md font-bold text-lg">
+                Score: <span id="score-val" class="math-font">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-1 flex gap-6 overflow-hidden">
+        
+        <div class="w-5/12 flex flex-col gap-5 overflow-y-auto pt-2 pb-10 px-2">
+            <div class="bg-white border-[6px] border-pink-300 p-8 rounded-[2.5rem] text-center shadow-inner relative shrink-0">
+                <div id="q-text" class="text-5xl font-bold text-slate-700 math-font tracking-tight leading-tight"></div>
+            </div>
+            
+            <div id="steps-container" class="space-y-6">
+                </div>
+            
+            <div id="feedback-hint" class="min-h-[60px] flex items-center justify-center rounded-2xl font-bold text-lg px-4 opacity-0 transition-all duration-300"></div>
+        </div>
+
+        <div class="w-7/12 stitch-card flex flex-col bg-white overflow-hidden">
+            <div class="px-6 py-3 bg-pink-50 border-b-2 border-pink-100 flex justify-between items-center">
+                <div class="flex gap-3">
+                    <button id="btn-pen" onclick="switchTool('pen')" class="cute-btn px-6 py-2 text-xs tool-active">✏️ 鉛筆模式</button>
+                    <button id="btn-eraser" onclick="switchTool('eraser')" class="cute-btn px-6 py-2 text-xs bg-white !text-pink-500 border-2 border-pink-200 shadow-none">🧽 橡皮擦</button>
+                </div>
+                <button onclick="clearScratchpad()" class="text-xs font-bold text-pink-400 hover:text-pink-600 transition">清空算草紙</button>
+            </div>
+            <div class="flex-1 relative bg-white" id="canvas-wrapper">
+                <canvas id="scratch-canvas" class="absolute inset-0 w-full h-full cursor-crosshair"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div id="report-card" class="flex items-center justify-center p-6">
+        <div class="bg-white p-12 rounded-[3.5rem] border-8 border-pink-300 max-w-lg w-full text-center shadow-2xl">
+            <div class="text-6xl mb-6">🎉</div>
+            <h2 class="text-4xl font-black text-pink-600 mb-2">太棒了！挑戰完成</h2>
+            <p class="text-slate-400 mb-8">你已經掌握了四則運算的優先順序</p>
+            <div class="bg-pink-50 rounded-3xl p-8 mb-10">
+                <div class="text-sm text-pink-400 font-bold uppercase tracking-widest mb-1">Final Score</div>
+                <div id="final-score" class="text-6xl font-black text-pink-600 math-font">0</div>
+            </div>
+            <button onclick="restartGame()" class="cute-btn w-full py-5 text-2xl shadow-xl">重新開始冒險</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 初始化狀態管理 ---
+        const DB_KEY = "MATH_VER_4.0";
+        let state = JSON.parse(localStorage.getItem(DB_KEY)) || {
+            currentLevel: 0,
+            questionIndex: 0,
+            score: 0,
+            step: 1, // 1: 選擇優先項, 2+: 步驟計算
+            currentQ: null
+        };
+
+        const saveState = () => localStorage.setItem(DB_KEY, JSON.stringify(state));
+
+        // --- 核心邏輯：動態題目生成器 ---
+        function generateSmartQ(level) {
+            const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+            let q = { text: "", steps: [], correctPart: "", options: [] };
+
+            if (level === 0) { // 基本級：加減除
+                const div = [2, 4, 5, 10][rand(0, 3)], quo = rand(3, 15), dd = div * quo, n1 = rand(10, 50);
+                q.text = `${n1} + ${dd} ÷ ${div}`;
+                q.correctPart = `${dd} ÷ ${div}`;
+                q.options = [q.correctPart, `${n1} + ${dd}`, `${dd} + ${div}`];
+                q.steps = [
+                    { id: 2, title: "計算除法部分", exp: `${dd} ÷ ${div}`, ans: quo },
+                    { id: 3, title: "最後完成加法", exp: `${n1} + ${quo}`, ans: n1 + quo }
+                ];
+            } else if (level === 1) { // 普通級：括號優先
+                const b1 = rand(10, 30), b2 = rand(5, 20), div = rand(2, 6), dd = (b1 + b2) * div;
+                q.text = `${dd} ÷ (${b1} + ${b2})`;
+                q.correctPart = `(${b1} + ${b2})`;
+                q.options = [q.correctPart, `${dd} ÷ ${b1}`, `(${b1} - ${b2})`];
+                q.steps = [
+                    { id: 2, title: "優先計算括號", exp: `${b1} + ${b2}`, ans: b1 + b2 },
+                    { id: 3, title: "最後執行除法", exp: `${dd} ÷ ${b1 + b2}`, ans: div }
+                ];
+            } else { // 挑戰級：多重運算
+                const b1 = rand(5, 15), b2 = rand(2, 10), sum2 = b1 + b2, quo = rand(4, 10), sum1 = sum2 * quo;
+                const a1 = rand(10, 30), a2 = sum1 - a1;
+                q.text = `(${a1} + ${a2}) ÷ (${b1} + ${b2})`;
+                q.correctPart = `(${a1} + ${a2})`;
+                q.options = [q.correctPart, `(${b1} + ${b2})`, `(${a1} - ${a2})`];
+                q.steps = [
+                    { id: 2, title: "計算左括號", exp: `${a1} + ${a2}`, ans: sum1 },
+                    { id: 3, title: "計算右括號", exp: `${b1} + ${b2}`, ans: sum2 },
+                    { id: 4, title: "完成最後除法", exp: `${sum1} ÷ ${sum2}`, ans: quo }
+                ];
+            }
+            q.options = q.options.sort(() => Math.random() - 0.5);
+            return q;
+        }
+
+        // --- UI 渲染邏輯 ---
+        function render() {
+            if (state.questionIndex >= 35) {
+                document.getElementById('report-card').style.display = 'flex';
+                document.getElementById('final-score').innerText = state.score;
+                return;
+            }
+
+            if (!state.currentQ) {
+                state.currentQ = generateSmartQ(state.currentLevel);
+                clearScratchpad(); // ✨ 新題目自動清空
+            }
+            saveState();
+
+            const q = state.currentQ;
+            document.getElementById('q-text').innerText = q.text;
+            document.getElementById('q-idx').innerText = `${state.questionIndex + 1}/35`;
+            document.getElementById('score-val').innerText = state.score;
+            document.getElementById('level-badge').innerText = `LEVEL: ${['JUNIOR', 'MEDIUM', 'MASTER'][state.currentLevel]}`;
+
+            const container = document.getElementById('steps-container');
+            container.innerHTML = "";
+
+            // 步驟一：選擇
+            const s1 = document.createElement('div');
+            s1.className = `stitch-card p-6 ${state.step === 1 ? 'step-active' : 'opacity-60'}`;
+            s1.innerHTML = `<h3 class="text-pink-500 font-bold mb-4 italic">Step 1. 識別優先運算項</h3>`;
+            if (state.step === 1) {
+                const grid = document.createElement('div'); grid.className = "grid gap-3";
+                q.options.forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = "cute-btn py-4 text-xl math-font";
+                    btn.innerText = opt;
+                    btn.onclick = (e) => {
+                        if (opt === q.correctPart) {
+                            playSuccess(e.clientX, e.clientY);
+                            state.step = 2; render();
+                        } else {
+                            showFeedback("❌ 不是這部分喔，再觀察一下運算符！", false);
+                        }
+                    };
+                    grid.appendChild(btn);
+                });
+                s1.appendChild(grid);
+            } else {
+                s1.innerHTML += `<div class="text-green-600 font-black text-2xl">✅ 正確選取：${q.correctPart}</div>`;
+            }
+            container.appendChild(s1);
+
+            // 計算步驟
+            q.steps.forEach((s, idx) => {
+                if (state.step < s.id) return;
+                const card = document.createElement('div');
+                card.className = `stitch-card p-6 ${state.step === s.id ? 'step-active' : 'opacity-50 scale-[0.98]'}`;
+                card.innerHTML = `<h3 class="text-pink-500 font-bold mb-4 italic">Step ${idx + 2}. ${s.title}</h3>`;
+                
+                if (state.step === s.id) {
+                    const inputWrap = document.createElement('div');
+                    inputWrap.className = "flex items-center gap-4";
+                    inputWrap.innerHTML = `
+                        <div class="text-4xl font-bold math-font text-slate-600">${s.exp} =</div>
+                        <input type="number" id="math-input" class="w-32 p-3 border-b-8 border-pink-400 text-4xl text-center outline-none bg-transparent font-black text-pink-600" placeholder="?">
+                        <button onclick="validateStep(${idx}, event)" class="cute-btn px-10 py-4 text-lg">確認</button>
+                    `;
+                    card.appendChild(inputWrap);
+                    setTimeout(() => document.getElementById('math-input').focus(), 200);
+                } else {
+                    card.innerHTML += `<div class="text-green-600 font-black text-2xl">✅ 計算結果：${s.ans}</div>`;
+                }
+                container.appendChild(card);
+            });
+        }
+
+        function validateStep(idx, e) {
+            const input = document.getElementById('math-input');
+            const userVal = parseInt(input.value);
+            const correctVal = state.currentQ.steps[idx].ans;
+
+            if (userVal === correctVal) {
+                playSuccess(e.clientX, e.clientY);
+                if (idx === state.currentQ.steps.length - 1) {
+                    state.questionIndex++; state.score += 10; state.step = 1; state.currentQ = null;
+                    if (state.questionIndex % 5 === 0 && state.currentLevel < 2) state.currentLevel++;
+                } else {
+                    state.step++;
+                }
+                render();
+            } else {
+                input.classList.add('input-error');
+                showFeedback("⚠️ 數字算錯了，在算草紙上再驗算一次！", false);
+                setTimeout(() => input.classList.remove('input-error'), 400);
+            }
+        }
+
+        // --- 專業 Canvas 算草系統 ---
+        let ctx, drawing = false, tool = 'pen';
+        function initCanvas() {
+            const cvs = document.getElementById('scratch-canvas');
+            ctx = cvs.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+
+            const resize = () => {
+                const rect = cvs.parentElement.getBoundingClientRect();
+                cvs.width = rect.width * dpr;
+                cvs.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                updateBrush();
+            };
+
+            const getPos = (e) => {
+                const rect = cvs.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                return [clientX - rect.left, clientY - rect.top];
+            };
+
+            const start = (e) => { drawing = true; ctx.beginPath(); ctx.moveTo(...getPos(e)); };
+            const move = (e) => { if (drawing) { ctx.lineTo(...getPos(e)); ctx.stroke(); } };
+            const stop = () => { drawing = false; };
+
+            cvs.onmousedown = start; cvs.onmousemove = move; window.onmouseup = stop;
+            cvs.ontouchstart = (e) => { e.preventDefault(); start(e); };
+            cvs.ontouchmove = (e) => { e.preventDefault(); move(e); };
+            cvs.ontouchend = stop;
+
+            window.addEventListener('resize', resize);
+            resize();
+        }
+
+        function updateBrush() {
+            ctx.strokeStyle = (tool === 'eraser') ? '#FFFFFF' : '#9D81BA';
+            ctx.lineWidth = (tool === 'eraser') ? 40 : 3;
+        }
+
+        window.switchTool = (t) => {
+            tool = t;
+            updateBrush();
+            document.getElementById('btn-pen').className = t === 'pen' ? 'cute-btn px-6 py-2 text-xs tool-active' : 'cute-btn px-6 py-2 text-xs bg-white !text-pink-500 border-2 border-pink-200';
+            document.getElementById('btn-eraser').className = t === 'eraser' ? 'cute-btn px-6 py-2 text-xs tool-active' : 'cute-btn px-6 py-2 text-xs bg-white !text-pink-500 border-2 border-pink-200';
+        };
+
+        window.clearScratchpad = () => ctx.clearRect(0, 0, 2000, 2000);
+        window.restartGame = () => { localStorage.removeItem(DB_KEY); location.reload(); };
+
+        // --- 視覺反饋系統 ---
+        const confCanvas = document.getElementById('confetti-canvas');
+        const confCtx = confCanvas.getContext('2d');
+        let particles = [];
+
+        function playSuccess(x, y) {
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10 - 5,
+                    size: Math.random() * 8 + 4,
+                    color: `hsl(${Math.random() * 360}, 100%, 70%)`,
+                    life: 1
+                });
+            }
+        }
+
+        function animate() {
+            confCanvas.width = window.innerWidth;
+            confCanvas.height = window.innerHeight;
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.life -= 0.02;
+                if (p.life <= 0) particles.splice(i, 1);
+                confCtx.fillStyle = p.color;
+                confCtx.globalAlpha = p.life;
+                confCtx.beginPath();
+                confCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                confCtx.fill();
+            });
+            requestAnimationFrame(animate);
+        }
+
+        function showFeedback(msg, isSuccess) {
+            const el = document.getElementById('feedback-hint');
+            el.innerText = msg;
+            el.style.opacity = 1;
+            el.className = `min-h-[60px] flex items-center justify-center rounded-2xl font-bold text-lg px-4 ${isSuccess ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`;
+            setTimeout(() => el.style.opacity = 0, 2500);
+        }
+
+        // 啟動
+        initCanvas();
+        animate();
+        render();
+
+    </script>
+</body>
+</html>
